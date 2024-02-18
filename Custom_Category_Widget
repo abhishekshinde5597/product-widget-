@@ -1,0 +1,278 @@
+<?php
+
+use Elementor\Controls_Manager;
+
+class Custom_Category_Widget extends \Elementor\Widget_Base {
+  
+
+    public function get_name() {
+        return 'woocommerce_feature_widget';
+    }
+
+    public function get_title() {
+        return __('WooCommerce Feature Widget', 'text-domain');
+    }
+
+    public function get_icon() {
+        return 'eicon-products';
+    }
+
+    protected function _register_controls() {
+        $this->start_controls_section(
+            'content_section',
+            [
+                'label' => __('Query', 'text-domain'),
+                'tab' => Controls_Manager::TAB_CONTENT,
+            ]
+        );
+
+        $this->add_control(
+            'categories',
+            [
+                'label' => __('Product Categories', 'text-domain'),
+                'type' => Controls_Manager::SELECT2,
+                'multiple' => true,
+                'options' => $this->get_product_categories(),
+            ]
+        );
+
+        $this->add_control(
+            'order',
+            [
+                'label' => __('Order', 'text-domain'),
+                'type' => Controls_Manager::SELECT,
+                'options' => [
+                    'asc' => __('Ascending', 'text-domain'),
+                    'desc' => __('Descending', 'text-domain'),
+                ],
+                'default' => 'asc',
+            ]
+        );
+
+        $this->add_control(
+            'posts_select_date',
+            [
+                'label' => esc_html__('Date', 'textdomain'),
+                'type' => \Elementor\Controls_Manager::SELECT,
+                'options' => [
+                    'anytime' => esc_html__('All', 'textdomain'),
+                    'today' => esc_html__('Past Day', 'textdomain'),
+                    'week' => esc_html__('Past Week', 'textdomain'),
+                    'month' => esc_html__('Past Month', 'textdomain'),
+                    'quarter' => esc_html__('Past Quarter', 'textdomain'),
+                    'year' => esc_html__('Past Year', 'textdomain'),
+                    'exact' => esc_html__('Custom', 'textdomain'),
+                ],
+                'default' => 'anytime', // Default selected option
+            ]
+        );
+        
+
+        $this->add_control(
+			'post_per_page',
+			[
+				'label' => esc_html__( 'post-per-page', 'textdomain' ),
+				'type' => \Elementor\Controls_Manager::NUMBER,
+				'min' => 1,
+				'max' => 100,
+				'step' => 1,
+				'default' => 5,
+			]
+		);
+
+        $this->add_control(
+            'product_selection',
+            [
+                'label' => esc_html__( 'Product Selection', 'textdomain' ),
+                'type' => \Elementor\Controls_Manager::SWITCHER,
+                'label_on' => esc_html__( 'Featured', 'textdomain' ),
+                'label_off' => esc_html__( 'Default', 'textdomain' ),
+                'return_value' => 'featured',
+                'default' => 'default',
+            ]
+        );
+
+        
+
+        $this->end_controls_section();
+    }
+
+    protected function get_product_categories() {
+        $options = [];
+        $categories = get_categories(['taxonomy' => 'product_cat']);
+
+        foreach ($categories as $category) {
+            $options[$category->term_id] = $category->name;
+        }
+
+        return $options;
+    }
+
+    protected function render() {
+        $settings = $this->get_settings_for_display();
+
+        $args = [
+            'post_type' => 'product',
+            'posts_per_page' => $settings['post_per_page'],
+            'orderby' => 'title', // Default order by title
+            'order' => 'ASC', // Default order ASC
+        ];
+        
+        if ($settings['posts_select_date'] === 'today') {
+            // Apply filter for products posted today
+            $args['date_query'] = [
+                [
+                    'after' => '1 day ago',
+                ],
+            ];
+        } elseif ($settings['posts_select_date'] === 'week') {
+            // Apply filter for products posted in the past week
+            $args['date_query'] = [
+                [
+                    'after' => '1 week ago',
+                ],
+            ];
+        }
+        if ($settings['product_selection'] === 'featured') {
+            $args['meta_query'] = [
+                [
+                    'key' => '_featured_post',
+                    'value' => 'on',
+                ],
+            ];
+        }
+        
+            // If not featured, set the category query
+            if (!empty($settings['category_products'])) {
+                $args['tax_query'] = [
+                    [
+                        'taxonomy' => 'product_cat',
+                        'field' => 'id',
+                        'terms' => $settings['category_products'],
+                    ],
+                ];
+            }
+    
+      if (!empty($settings['categories'])) {
+            $args['tax_query'] = [
+                [
+                    'taxonomy' => 'product_cat',
+                    'field' => 'id',
+                    'terms' => $settings['categories'],
+                ],
+            ];
+        }
+
+        if ($settings['order'] === 'desc') {
+            $args['order'] = 'DESC';
+        }
+
+        $query = new WP_Query($args);
+
+        if ($query->have_posts()) :
+            ?>
+            <div class="fit-products-ctm">
+                <ul>
+                    <?php while ($query->have_posts()) : $query->the_post();
+                        global $product;
+                        $product_type_class = 'fit-product-' . sanitize_html_class($product->get_type());
+                        ?>
+                        <li class="fit-product-main <?php echo esc_attr($product_type_class); ?>">
+                            <a href="<?php the_permalink(); ?>">
+                                <div class="fit-pro-outer">
+                                    <?php the_post_thumbnail(); ?>
+                                </div>
+                            </a>
+                            <div class="fit-details-inner">
+                                <h2 class="fit-product-title"><?php the_title(); ?></h2>
+                                <?php
+
+                                if ($product->is_type('variable')) {
+                                    $variations = $product->get_available_variations();
+                                    // Check if there are variations
+                                    if (!empty($variations)) {
+                                        echo '<form class="cart fit-cart" method="post" enctype="multipart/form-data">';
+                                        echo '<label for="variation-dropdown-' . $product->get_id() . '"> Choose a Size:</label>';
+                                        echo '<select name="variation_id" id="' . $product->get_id() . '" class="variation-dropdown">';
+                                        foreach ($variations as $variation) {
+                                            echo '<option value="' . $variation['variation_id'] . '">' . $variation['attributes']['attribute_pa_size'] . '</option>';
+                                        }
+                                        echo '</select>';
+                                        echo '</form>';
+                                    } else {
+                                        echo '<p class="no-vari">No variations available for this product.</p>';
+                                    }
+                                }
+                                ?>
+                                <?php if ($average = $product->get_average_rating()) : ?>
+                                    <?php echo '<div class="star-rating" title="'.sprintf(__( 'Rated %s out of 5', 'woocommerce' ), $average).'"><span style="width:'.( ( $average / 5 ) * 100 ) . '%"><strong itemprop="ratingValue" class="rating">'.$average.'</strong> '.__( 'out of 5', 'woocommerce' ).'</span></div>'; ?>
+                                <?php endif; ?>
+                                <?php
+                                $regular_price = $product->get_regular_price();
+                                $sale_price = $product->get_price();
+
+                                ?>
+                                <span class="price">
+                                    <?php
+
+                                    if ($product->is_type('variable')) {
+                                        $variation_ids = $product->get_children(); // Get variation IDs
+                                        $prices = array();
+
+                                        foreach ($variation_ids as $variation_id) {
+                                            $variation = wc_get_product($variation_id);
+                                            $variation_regular_price = $variation->get_regular_price();
+                                            $variation_sale_price = $variation->get_price();
+
+                                            if ($variation_sale_price) {
+                                                $prices[] = $variation_sale_price;
+                                            } elseif ($variation_regular_price) {
+                                                $prices[] = $variation_regular_price;
+                                            }
+                                        }
+
+                                        if (!empty($prices)) {
+                                            $min_price = min($prices);
+                                            $max_price = max($prices);
+
+                                            if ($min_price === $max_price) {
+                                                echo '<b>' . wc_price($min_price) . '</b>';
+                                            } else {
+                                                echo '<b>' . wc_price($min_price) . ' - ' . wc_price($max_price) . '</b>';
+                                            }
+                                        }
+                                    } else if ($product->is_type('simple')) {
+                                        if ($sale_price === $regular_price) {
+                                            echo '<b>' . $regular_price . '</b>';
+                                        } else {
+                                            echo '<del class="fit-currency" >' . wc_price($regular_price) . '</del> ' . wc_price($sale_price);
+                                        }
+                                    } elseif ($regular_price) {
+                                        echo '<b>' . wc_price($regular_price) . '</b>';
+                                    } elseif ($sale_price) {
+                                        echo '<b>' . wc_price($sale_price) . '</b>';
+                                    }
+
+                                    ?>
+
+                                </span>
+                            </div>
+
+                            <?php
+                            $pid = $product->get_id();
+                            ?>
+                            <a href="#" class="fit-add-to-cart-ctm" data-productid="<?php echo $pid ?>">Add to cart</a>
+                        </li>
+                    <?php endwhile;
+                    wp_reset_postdata();
+                    ?>
+                </ul>
+            </div>
+        <?php
+        else :
+            echo 'No featured products found';
+        endif;
+    }
+    
+}
+
