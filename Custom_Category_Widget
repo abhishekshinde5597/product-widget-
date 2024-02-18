@@ -61,7 +61,25 @@ class Custom_Category_Widget extends \Elementor\Widget_Base {
                     'month' => esc_html__('Past Month', 'textdomain'),
                     'quarter' => esc_html__('Past Quarter', 'textdomain'),
                     'year' => esc_html__('Past Year', 'textdomain'),
-                    'exact' => esc_html__('Custom', 'textdomain'),
+                ],
+                'default' => 'anytime', // Default selected option
+            ]
+        );
+
+       
+        
+        $this->add_control(
+            'Orderby',
+            [
+                'label' => esc_html__('Order by', 'textdomain'),
+                'type' => \Elementor\Controls_Manager::SELECT,
+                'options' => [
+                    'post_date' => esc_html__('Date', 'textdomain'),
+                    'post_title' => esc_html__('Title', 'textdomain'),
+                    'menu_order' => esc_html__('Menu Order', 'textdomain'),
+                    'modified' => esc_html__('Last Modified', 'textdomain'),
+                    'comment_count' => esc_html__('Comment Count', 'textdomain'),
+                    'rand' => esc_html__('Random', 'textdomain'),
                 ],
                 'default' => 'anytime', // Default selected option
             ]
@@ -114,10 +132,12 @@ class Custom_Category_Widget extends \Elementor\Widget_Base {
         $args = [
             'post_type' => 'product',
             'posts_per_page' => $settings['post_per_page'],
-            'orderby' => 'title', // Default order by title
-            'order' => 'ASC', // Default order ASC
+            'order' => 'ASC',
+            'orderby' => 'title',
+            // Default order ASC
         ];
-        
+      
+
         if ($settings['posts_select_date'] === 'today') {
             // Apply filter for products posted today
             $args['date_query'] = [
@@ -133,6 +153,31 @@ class Custom_Category_Widget extends \Elementor\Widget_Base {
                 ],
             ];
         }
+        elseif ($settings['posts_select_date'] === 'month') {
+            // Apply filter for products posted in the past week
+            $args['date_query'] = [
+                [
+                    'after' => '1 Month ago',
+                ],
+            ];
+        }
+        elseif ($settings['posts_select_date'] === 'quarter') {
+            // Apply filter for products posted in the past week
+            $args['date_query'] = [
+                [
+                    'after' => '1 quarter ago',
+                ],
+            ];
+        }
+        elseif ($settings['posts_select_date'] === 'year') {
+            // Apply filter for products posted in the past week
+            $args['date_query'] = [
+                [
+                    'after' => '1 year ago',
+                ],
+            ];
+        }
+        
         if ($settings['product_selection'] === 'featured') {
             $args['meta_query'] = [
                 [
