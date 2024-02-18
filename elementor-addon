@@ -1,0 +1,223 @@
+<?php
+
+/**
+ * Plugin Name: Elementor Addon
+ * Description: Custom Widgte Slider Addon 
+ * Version:     1.0.0
+ * Author:      Abhishek
+ * Author URI:  https://www.trooinbound.com/
+ * Text Domain: elementor-addon
+ */
+
+function register_custom_slider_widget($widgets_manager)
+{
+
+    require_once(__DIR__ . '/widgets/multi-location-map.php');
+    require_once(__DIR__ . '/widgets/Custom_Google_Maps_Widget.php');
+    require_once(__DIR__ . '/widgets/Custom_Category_Widget.php');
+
+
+    $widgets_manager->register(new \Multi_Location_Map());
+    $widgets_manager->register(new \Custom_Google_Maps_Widget());
+    $widgets_manager->register(new \Custom_Category_Widget());
+}
+add_action('elementor/widgets/register', 'register_custom_slider_widget');
+
+
+function add_featured_meta_box()
+{
+    add_meta_box(
+        'featured-meta-box',
+        'Featured Post',
+        'featured_meta_box_callback',
+        'post',
+        'side',
+        'default'
+    );
+}
+add_action('add_meta_boxes', 'add_featured_meta_box');
+
+function featured_meta_box_callback($post)
+{
+    $featured = get_post_meta($post->ID, '_featured_post', true);
+?>
+    <label for="featured-post">
+        <input type="checkbox" name="featured-post" id="featured-post" <?php checked($featured, 'on'); ?> />
+        Mark this post as featured
+    </label>
+<?php
+}
+
+function save_featured_post_meta($post_id)
+{
+    if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE)
+        return $post_id;
+
+    if (isset($_POST['featured-post'])) {
+        update_post_meta($post_id, '_featured_post', 'on');
+    } else {
+        delete_post_meta($post_id, '_featured_post');
+    }
+}
+add_action('save_post', 'save_featured_post_meta');
+
+// Add custom column to post listing
+function add_featured_column($columns)
+{
+    $columns['featured_post'] = 'Featured Post';
+    return $columns;
+}
+add_filter('manage_posts_columns', 'add_featured_column');
+
+// Populate the custom column with the editable featured post status
+function display_featured_column($column, $post_id)
+{
+    if ($column === 'featured_post') {
+        $featured = get_post_meta($post_id, '_featured_post', true);
+        $star_icon = ($featured === 'on') ? 'fas fa-star' : 'far fa-star';
+
+        echo '<span class="featured-star ' . esc_attr($star_icon) . '" data-post-id="' . esc_attr($post_id) . '"></span>';
+    }
+}
+add_action('manage_posts_custom_column', 'display_featured_column', 10, 2);
+
+// Add JavaScript to handle the star icon click event and update post meta
+function featured_column_js()
+{
+?>
+    <script type="text/javascript">
+        jQuery(document).ready(function($) {
+            jQuery('.featured-star').on('click', function() {
+                var post_id = jQuery(this).data('post-id');
+                var featured = jQuery(this).hasClass('fas fa-star') ? 'off' : 'on';
+
+				jQuery.ajax({
+                    url: ajaxurl,
+                    type: 'POST',
+                    data: {
+                        action: 'update_featured_status',
+                        post_id: post_id,
+                        featured: featured,
+                    },
+                    success: function(response) {
+                        location.reload();
+                    }
+                });
+            });
+        });
+
+		
+    </script>
+<?php
+}
+add_action('admin_footer', 'featured_column_js');
+
+// Ajax handler to update post meta when star icon is clicked
+function update_featured_status()
+{
+    $post_id = $_POST['post_id'];
+    $featured = $_POST['featured'];
+
+    // For Multiple Featured Post  
+   
+            if ($featured === 'on') {
+                update_post_meta($post_id, '_featured_post', 'on');
+            } else {
+                delete_post_meta($post_id, '_featured_post');
+            }
+
+    die();
+}
+add_action('wp_ajax_update_featured_status', 'update_featured_status');
+
+function enqueue_font_awesome()
+{
+    wp_enqueue_style('font-awesome', 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css');
+}
+add_action('admin_enqueue_scripts', 'enqueue_font_awesome');
+
+
+function ajaxaddtocart()
+{
+?>
+   <script type="text/javascript">
+    jQuery(document).ready(function($) {
+        jQuery(document).on('click', '.fit-add-to-cart-ctm', function(e) {
+                e.preventDefault();
+                //console.log("test");
+                // var product_id = jQuery(this).data('product-id');
+                //var product_id = jQuery(this).data('product-id');
+                var variation_id =jQuery(this).prev().find('select.variation-dropdown').val();
+                var p_id =jQuery(this).prev().find('select.variation-dropdown').attr("id");
+                var s_id = jQuery(this).data('productid');
+                // console.log(variation_id);
+                // console.log(s_id);
+                //    var variation_id = selectedOption.val();
+                
+                // var product_id =jQuery(this).attr('data');
+                
+                    jQuery.ajax({
+                            url: 'http://localhost/Bistonsas/wp-admin/admin-ajax.php',
+                            type: 'POST',
+                            data: {
+                                action: 'load_variation_data',
+                                variation_id: variation_id,
+                                p_id: p_id,
+                                s_id :s_id,
+                            
+                            },
+                            success: function(response) {
+                            window.location.href = 'http://localhost/Bistonsas/cart';
+                            
+                            }
+                        });
+                });
+
+              
+            jQuery(document).on('change', '.variation-dropdown', function() {
+                    var variation_id = jQuery(this).val();
+                    var data = {
+                        'action': 'get_variation_price',
+                        'variation_id': variation_id
+                    };
+                    jQuery.ajax({
+                        url: 'http://localhost/Bistonsas/wp-admin/admin-ajax.php',
+                        data: data,
+                        type: 'POST',
+                        success: function(response) {
+                            jQuery('.price').html(response);
+                        }
+                    });
+            });
+
+    });
+    </script>
+<?php
+}
+add_action('wp_footer', 'ajaxaddtocart');
+
+function load_variation_data() {
+    if (isset($_POST['variation_id']) && isset($_POST['p_id'])) {
+        WC()->cart->add_to_cart($_POST['p_id'], 1, $_POST['variation_id']);
+        $cart_url = wc_get_cart_url();
+        echo esc_url($cart_url);
+    }else{
+		
+		WC()->cart->add_to_cart($_POST['s_id'], 1);
+	}
+    exit();
+}
+add_action('wp_ajax_load_variation_data', 'load_variation_data');
+add_action('wp_ajax_nopriv_load_variation_data', 'load_variation_data');
+
+add_action('wp_ajax_get_variation_price', 'get_variation_price');
+add_action('wp_ajax_nopriv_get_variation_price', 'get_variation_price');
+
+function get_variation_price() {
+    if (isset($_POST['variation_id'])) {
+        $variation_id = intval($_POST['variation_id']);
+        $variation = new WC_Product_Variation($variation_id);
+        echo $variation->get_price_html();
+    }
+    wp_die();
+}
